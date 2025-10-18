@@ -24,3 +24,5 @@ jobs:
 
           echo "::debug::Upload files"
           gh release upload --clobber nightly ./*.apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
