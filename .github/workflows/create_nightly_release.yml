@@ -13,7 +13,7 @@ jobs:
       - name: Task
         run: |
           echo "::notice::Backup and delete"
-          gh release download nightly
+          gh release download --clobber nightly
           gh release delete nightly
 
           echo "::notice::Create new release"
@@ -23,6 +23,6 @@ jobs:
             --latest
 
           echo "::notice::Upload files"
-          gh release upload --clobber nightly ./*.apk
+          gh release upload --clobber nightly ./Iconify-fork-debug.apk
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
