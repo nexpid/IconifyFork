@@ -2,32 +2,14 @@ name: Build Debug APK
 
 on:
   push:
-    branches: [ "beta" ]
+    branches:
+      - beta
   workflow_dispatch:
 
+env:
+  APK_NAME: build/Iconify-fork-debug.apk
+
 jobs:
-  synchronize-with-crowdin:
-    name: Upload strings to Crowdin
-    if: github.repository_owner == 'Mahmud0808'
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Upload Strings
-        uses: crowdin/github-action@v2
-        with:
-          upload_translations: false
-          upload_sources: true
-          download_translations: false
-          localization_branch_name: beta-localization
-          create_pull_request: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
-
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
@@ -44,111 +26,30 @@ jobs:
         run: chmod +x gradlew
 
       - name: Get application version name
-        run: echo "VERSION_NAME=$(${{github.workspace}}/gradlew -q printVersionName)" >> $GITHUB_ENV
+        run: echo "VERSION_NAME=$(${{ github.workspace }}/gradlew -q printVersionName)" >> $GITHUB_ENV
 
       - name: Bump application version code
         uses: chkfung/android-version-actions@v1.2.3
         with:
           gradlePath: app/build.gradle.kts
-          versionCode: ${{github.run_number}}
-          versionName: "${{ env.VERSION_NAME }} Dev (#${{github.run_number}})"
-
-      - name: Write sign info
-        if: github.repository == 'Mahmud0808/Iconify'
-        run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
-            echo storePassword='${{ secrets.KEYSTORE_PASSWORD }}' >> keystore.properties
-            echo keyAlias='${{ secrets.KEY_ALIAS }}' >> keystore.properties
-            echo keyPassword='${{ secrets.KEY_PASSWORD }}' >> keystore.properties
-            echo storeFile='${{ github.workspace }}/key.jks' >> keystore.properties
-            echo ${{ secrets.KEYSTORE }} | base64 --decode > ${{ github.workspace }}/key.jks
-          fi
+          versionCode: ${{ github.run_number }}
+          versionName: "${{ env.VERSION_NAME }} Dev (#${{ github.run_number }})"
 
       - name: Build with Gradle
         run: |
-          ./gradlew assembleFossDebug -PsplitApks
           ./gradlew assembleStandardDebug
+          mv app/build/outputs/apk/standard/debug/*.apk ${{ env.APK_NAME }}
 
       - name: Upload Standard Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "Iconify Standard v${{ env.VERSION_NAME }} Dev (#${{github.run_number}})"
-          path: app/build/outputs/apk/standard/debug/*.apk
+          name: "Iconify Fork v${{ env.VERSION_NAME }} Dev (#${{ github.run_number }})"
+          path: ${{ env.APK_NAME }}
           if-no-files-found: error
 
-      - name: Upload FOSS Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: "Iconify (FOSS) v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}) - arm64-v8a"
-          path: app/build/outputs/apk/foss/debug/*-arm64-v8a-*.apk
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: "Iconify (FOSS) v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}) - armeabi-v7a"
-          path: app/build/outputs/apk/foss/debug/*-armeabi-v7a-*.apk
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: "Iconify (FOSS) v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}) - x86"
-          path: app/build/outputs/apk/foss/debug/*-x86-*.apk
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: "Iconify (FOSS) v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}) - x86_64"
-          path: app/build/outputs/apk/foss/debug/*-x86_64-*.apk
-          if-no-files-found: error
-
-      - name: Get Commit Messages
-        id: get_commit_message
+      - name: Upload Release
         run: |
-          COMMIT_MESSAGE_HEADER=""
-          COMMIT_MESSAGE_HEADER=$(git log -1 --pretty=%B | head -n 1)
-
-          if [[ "$COMMIT_MESSAGE_HEADER" == *".md"* || "$COMMIT_MESSAGE_HEADER" == *".yml"* ]]; then
-            echo "Skipping build upload."
-            echo "SKIP_BUILD=true" >> $GITHUB_ENV
-          else
-            echo "SKIP_BUILD=false" >> $GITHUB_ENV
-          fi
-
-          if [[ "$COMMIT_MESSAGE_HEADER" =~ ^Merge\ remote-tracking\ branch ]]; then
-            COMMIT_MESSAGE_HEADER="Synced with the latest changes"
-          fi
-
-          if [[ "$COMMIT_MESSAGE_HEADER" =~ Mahmud0808/beta-localization$ ]]; then
-            COMMIT_MESSAGE_HEADER="Updated translations"
-          fi
-
-          if [[ -z "$COMMIT_MESSAGE_HEADER" ]]; then
-            echo "No valid changelog found!"
-            COMMIT_MESSAGE_HEADER="No valid changelog found!"
-            echo "SKIP_BUILD=true" >> $GITHUB_ENV
-          fi
-
-          ESCAPED_MESSAGE=$(echo "$COMMIT_MESSAGE_HEADER" | jq -Rsa . | sed 's/^"\(.*\)"$/\1/' | sed "s/'//g")
-          echo "COMMIT_MESSAGE_HEADER=${ESCAPED_MESSAGE}" >> $GITHUB_ENV
-
-      - name: Clean Previous Release Folder
-        run: rm -rf releases && mkdir -p releases
-
-      - name: Zip Artifact for Sending to Telegram
-        if: env.SKIP_BUILD != 'true'
-        run: |
-          cd app/build/outputs/apk/standard/debug/
-          zip "../../../../../../releases/Iconify v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}).zip" *.apk -r
-
-      - name: Telegram File Attachment
-        if: github.repository == 'Mahmud0808/Iconify' && env.SKIP_BUILD != 'true'
-        run: |
-          set -e
-          curl -v "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMediaGroup" \
-            -F chat_id=${{ secrets.TG_CHAT_ID }} \
-            -F message_thread_id=${{ secrets.TG_CHAT_THREAD_ID }} \
-            -F media='[
-              {"type":"document", "media":"attach://Standard", "caption":"CHANGELOG: ${{ env.COMMIT_MESSAGE_HEADER }}"}
-            ]' \
-            -F Standard="@releases/Iconify v${{ env.VERSION_NAME }} Dev (#${{github.run_number}}).zip" \
-            -F disable_notification=true || exit 1
+          gh release upload nightly ${{ env.APK_NAME }}
+          gh release edit nightly --title "Nightly v${{ env.VERSION_NAME }} Dev (#${{ github.run_number }})"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
