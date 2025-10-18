@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- CREDITS: Based on Lockscreen CLock 3 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -30,9 +31,9 @@
         <TextClock
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="-24dp"
             android:alpha="0.9"
-            android:fontFamily="@font/sf_pro_stencil"
+            android:fontFamily="@font/moirai_one"
             android:format12Hour="hh:mm"
             android:format24Hour="HH:mm"
             android:gravity="center"
